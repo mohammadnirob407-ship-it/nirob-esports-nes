@@ -73,6 +73,36 @@ for (const [key, value] of Object.entries(defaults)) {
 }
 // ADMIN ACCOUNT SETUP
 const ADMIN_NAME = process.env.ADMIN_NAME;
+const ADMIN_EMAIL = process.env.ADMIN_EMAIL?.trim().toLowerCase();
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD;
+
+if (ADMIN_NAME && ADMIN_EMAIL && ADMIN_PASSWORD) {
+  if (ADMIN_PASSWORD.length < 12) {
+    throw new Error("ADMIN_PASSWORD must be at least 12 characters.");
+  }
+
+  const existingAdmin = db.prepare(
+    "SELECT id, role FROM users WHERE email = ?"
+  ).get(ADMIN_EMAIL);
+
+  if (!existingAdmin) {
+    const hash = bcrypt.hashSync(ADMIN_PASSWORD, 12);
+
+    db.prepare(`
+      INSERT INTO users (name, email, password, role)
+      VALUES (?, ?, ?, 'admin')
+    `).run(ADMIN_NAME.trim(), ADMIN_EMAIL, hash);
+
+    console.log("NES Admin account created.");
+  } else if (existingAdmin.role === "admin") {
+    console.log("NES Admin account already exists.");
+  } else {
+    console.log("WARNING: This email already belongs to a player.");
+  }
+} else {
+  console.log("Admin environment variables are missing.");
+}
+const ADMIN_NAME = process.env.ADMIN_NAME;
 const ADMIN_EMAIL = process.env.ADMIN_EMAIL;
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD;
 
