@@ -122,7 +122,14 @@ app.post("/api/login",authLimiter,async(req,res)=>{
  const {email,password}=req.body||{};
  const u=db.prepare("SELECT * FROM users WHERE email=?").get(String(email||"").toLowerCase());
  if(!u || !(await bcrypt.compare(password||"",u.password_hash))) return res.status(401).json({error:"Incorrect email or password."});
- req.session.userId=u.id; res.json({user:safeUser(u)});
+ req.session.userId = u.id;
+ });
+
+req.session.save((err) => {
+  if (err) {
+    return res.status(500).json({error: "Login session save failed."});
+  }
+  res.json({user: safeUser(u)});
 });
 app.post("/api/logout",requireAuth,(req,res)=>req.session.destroy(()=>res.json({ok:true})));
 
