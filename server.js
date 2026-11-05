@@ -123,7 +123,7 @@ app.post("/api/login",authLimiter,async(req,res)=>{
  const u=db.prepare("SELECT * FROM users WHERE email=?").get(String(email||"").toLowerCase());
  if(!u || !(await bcrypt.compare(password||"",u.password_hash))) return res.status(401).json({error:"Incorrect email or password."});
  req.session.userId = u.id;
- });
+ });});
 
 req.session.save((err) => {
   if (err) {
