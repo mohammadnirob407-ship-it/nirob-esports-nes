@@ -71,7 +71,43 @@ const defaults = {
 for (const [key, value] of Object.entries(defaults)) {
  db.prepare("INSERT OR IGNORE INTO settings (key,value) VALUES (?,?)").run(key,value);
 }
+// ADMIN ACCOUNT SETUP
+const ADMIN_NAME = process.env.ADMIN_NAME;
+const ADMIN_EMAIL = process.env.ADMIN_EMAIL;
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD;
 
+if (ADMIN_NAME && ADMIN_EMAIL && ADMIN_PASSWORD) {
+  const adminHash = bcrypt.hashSync(ADMIN_PASSWORD, 12);
+
+  const existingAdmin = db.prepare(
+    "SELECT id FROM users WHERE email = ?"
+  ).get(ADMIN_EMAIL.trim().toLowerCase());
+
+  if (existingAdmin) {
+    db.prepare(`
+      UPDATE users
+      SET name = ?, password = ?, role = 'admin'
+      WHERE id = ?
+    `).run(
+      ADMIN_NAME.trim(),
+      adminHash,
+      existingAdmin.id
+    );
+  } else {
+    db.prepare(`
+      INSERT INTO users (name, email, password, role)
+      VALUES (?, ?, ?, 'admin')
+    `).run(
+      ADMIN_NAME.trim(),
+      ADMIN_EMAIL.trim().toLowerCase(),
+      adminHash
+    );
+  }
+
+  console.log("NES Admin account configured.");
+} else {
+  console.log("Admin environment variables are missing.");
+}
 app.use(session({
  store: new SQLiteStore({
   db: "sessions.sqlite",
