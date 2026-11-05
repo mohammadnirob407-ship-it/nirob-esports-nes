@@ -1,16 +1,12 @@
 <!doctype html>
 <html lang="en">
-<link rel="manifest" href="/manifest.json">
-<meta name="theme-color" content="#080b12">
-<link rel="apple-touch-icon" href="/1793772748832.jpg">
-
-<script>
-if ("serviceWorker" in navigator) {
-  window.addEventListener("load", () => {
-    navigator.serviceWorker.register("/sw.js");
-  });</script><head>
-  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-  <meta name="theme-color" content="#6d45d9">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#080b12">
+  <meta name="description" content="NIROB E-SPORTS Free Fire Tournament App">
+  <link rel="manifest" href="/manifest.json">
+  <link rel="apple-touch-icon" href="/1793772748832.jpg">
   <title>NIROB E-SPORTS | NES</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Hind+Siliguri:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -20,4 +16,12 @@ if ("serviceWorker" in navigator) {
 <div id="app"><div class="loading">NES <span>Loading tournament arena…</span></div></div>
 <div id="toast" class="toast"></div>
 <script src="/app.js"></script>
-</body></html>
+<script>
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("/sw.js");
+  });
+}
+</script>
+</body>
+</html>
