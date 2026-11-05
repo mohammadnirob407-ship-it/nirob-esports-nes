@@ -467,6 +467,6 @@ app.get("*", (req, res) => {
 });
 
 // START SERVER
-app.listen(PORT, () => {
-  console.log("NES FC Mobile server running on " + PORT);
+app.listen(PORT, "0.0.0.0", () => {
+  console.log("NES FC Mobile server running on port " + PORT);
 });
