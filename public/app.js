@@ -5,14 +5,14 @@ const state = {
   settings: {},
   tournaments: [],
   registrations: [],
+  adminRegistrations: [],
   page: "home",
-  authMode: "login",
-  adminTab: "tournaments"
+  category: "ALL"
 };
 
-const $ = (selector) => document.querySelector(selector);
+const $ = selector => document.querySelector(selector);
 
-const esc = (value) => String(value ?? "").replace(/[&<>"']/g, char => ({
+const esc = value => String(value ?? "").replace(/[&<>"']/g, char => ({
   "&": "&amp;",
   "<": "&lt;",
   ">": "&gt;",
@@ -23,11 +23,11 @@ const esc = (value) => String(value ?? "").replace(/[&<>"']/g, char => ({
 async function api(url, options = {}) {
   const response = await fetch(url, {
     credentials: "same-origin",
+    ...options,
     headers: {
       "Content-Type": "application/json",
       ...(options.headers || {})
-    },
-    ...options
+    }
   });
 
   const data = await response.json().catch(() => ({}));
@@ -39,249 +39,374 @@ async function api(url, options = {}) {
   return data;
 }
 
+function notify(message) {
+  alert(message);
+}
+
 function money(value) {
   return "৳" + Number(value || 0).toLocaleString("en-BD");
 }
 
-function notice(message, error = false) {
-  const old = $("#toast");
-  if (old) old.remove();
-
-  const toast = document.createElement("div");
-  toast.id = "toast";
-  toast.textContent = message;
-  toast.style.cssText = `
-    position:fixed;z-index:9999;top:18px;left:50%;
-    transform:translateX(-50%);padding:13px 20px;
-    border-radius:10px;background:${error ? "#a62938" : "#087b50"};
-    color:white;font-weight:bold;max-width:90%;text-align:center;
-  `;
-  document.body.appendChild(toast);
-  setTimeout(() => toast.remove(), 3500);
-}
-
-async function init() {
-  try {
-    const data = await api("/api/me");
-    state.user = data.user;
-    state.settings = data.settings || {};
-    await loadTournaments();
-    render();
-  } catch (error) {
-    app.innerHTML = `<main><div class="card">Website loading failed. Please refresh.</div></main>`;
-  }
-}
-
-async function loadTournaments() {
-  state.tournaments = await api("/api/tournaments");
+function go(page) {
+  state.page = page;
+  render();
+  window.scrollTo(0, 0);
 }
 
 function header() {
   return `
-    <header style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;">
-      <a href="#" onclick="go('home');return false;" class="logo">
-        ⚽ ${esc(state.settings.logo_text || "NES")}
-        <small style="display:block;font-size:12px;color:white">
-          ${esc(state.settings.site_name || "NIROB E-SPORTS")}
-        </small>
+    <header>
+      <a href="#" class="logo" data-page="home">
+        ⚽ NIROB E-SPORTS
+        <small>FC MOBILE TOURNAMENT</small>
       </a>
-      <nav style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-        <button class="secondary" onclick="go('home')">Home</button>
-        <button class="secondary" onclick="go('tournaments')">Tournaments</button>
-        ${state.user ? `
-          <button class="secondary" onclick="go('dashboard')">My Account</button>
-          ${state.user.role === "admin" ? `<button class="secondary" onclick="go('admin')">Admin</button>` : ""}
-          <button class="btn" onclick="logout()">Logout</button>
-        ` : `
-          <button class="secondary" onclick="go('login')">Login</button>
-          <button class="btn" onclick="go('register')">Join Now</button>
-        `}
+
+      <nav>
+        <button data-page="home">Home</button>
+        <button data-page="home">Tournaments</button>
+        ${
+          state.user
+            ? `<button data-page="dashboard">Dashboard</button>`
+            : `<button data-page="login">Login</button>`
+        }
+        ${
+          state.user?.role === "admin"
+            ? `<button data-page="admin">Admin Panel</button>`
+            : ""
+        }
+        ${
+          state.user
+            ? `<button data-action="logout">Logout</button>`
+            : `<button data-page="register">Register</button>`
+        }
       </nav>
     </header>
   `;
 }
 
-function footer() {
+function tournamentCard(tournament) {
   return `
-    <footer>
-      <h3 style="color:#16e58b">NIROB E-SPORTS</h3>
-      <p>FC Mobile Tournament Community</p>
-      <p style="margin-top:8px">Play Fair • Compete • Win</p>
-      <small>© ${new Date().getFullYear()} NIROB E-SPORTS. All rights reserved.</small>
-    </footer>
+    <article class="card">
+      <span class="tag">${esc(tournament.category)}</span>
+      <h3>${esc(tournament.title)}</h3>
+
+      <p>Entry Fee: <strong>${money(tournament.entry_fee)}</strong></p>
+      <p>Prize Pool: <strong class="price">${money(tournament.prize)}</strong></p>
+      <p>Total Slots: ${esc(tournament.slots)}</p>
+      <p>Status: ${esc(tournament.status)}</p>
+      <p>Match Date: ${esc(tournament.match_date || "To be announced")}</p>
+
+      <button class="btn"
+        data-join="${tournament.id}"
+        ${tournament.status !== "open" ? "disabled" : ""}>
+        Join Tournament
+      </button>
+    </article>
   `;
 }
 
 function homePage() {
+  const tournaments = state.category === "ALL"
+    ? state.tournaments
+    : state.tournaments.filter(t => t.category === state.category);
+
   return `
-    <main>
+    <main class="container">
       <section class="hero">
-        <div style="font-size:45px">⚽ 🏆</div>
-        <p style="color:#16e58b;font-weight:bold">WELCOME TO NES</p>
-        <h1>YOUR GAME.<br>YOUR GLORY.</h1>
-        <p>Join FC Mobile tournaments and compete with the best players.</p>
-        <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:22px">
-          <button class="btn" onclick="go('tournaments')">Explore Tournaments →</button>
-          ${state.user ? "" : `<button class="secondary" onclick="go('register')">Create Account</button>`}
-        </div>
+        <h1>PLAY. <span>COMPETE.</span> WIN.</h1>
+        <p>Welcome to ${esc(state.settings.site_name || "NIROB E-SPORTS")}</p>
+        <p>${esc(state.settings.home_notice || "Join our FC Mobile tournaments!")}</p>
+        <button class="btn" data-page="register">Join NES Now</button>
       </section>
+
+      <div class="section-head">
+        <h2>FC Mobile <span>Tournaments</span></h2>
+      </div>
+
+      <div class="filters">
+        <button data-category="ALL" class="${state.category === "ALL" ? "active" : ""}">All</button>
+        <button data-category="FC MOBILE 1V1" class="${state.category === "FC MOBILE 1V1" ? "active" : ""}">1V1</button>
+        <button data-category="FC MOBILE 2V2" class="${state.category === "FC MOBILE 2V2" ? "active" : ""}">2V2</button>
+      </div>
+
+      <div class="grid">
+        ${
+          tournaments.length
+            ? tournaments.map(tournamentCard).join("")
+            : `<div class="empty">No tournaments available right now.</div>`
+        }
+      </div>
 
       <div class="notice">
-        📢 ${esc(state.settings.home_notice || "Welcome to NIROB E-SPORTS!")}
+        Fair Play • Respect Players • Enjoy FC Mobile
       </div>
-
-      <section>
-        <h2 style="margin-bottom:15px">⚡ Choose Your Mode</h2>
-        <div class="category-grid">
-          <button class="category" onclick="filterCategory('FC MOBILE 1V1')">
-            <div class="cat-icon">⚽</div>
-            <strong>FC MOBILE 1V1</strong>
-            <small>One versus one</small>
-          </button>
-          <button class="category" onclick="filterCategory('FC MOBILE 2V2')">
-            <div class="cat-icon">🏆</div>
-            <strong>FC MOBILE 2V2</strong>
-            <small>Team versus team</small>
-          </button>
-        </div>
-      </section>
-
-      <section>
-        <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:15px">
-          <h2>🔥 Latest Tournaments</h2>
-          <button class="secondary" onclick="go('tournaments')">View All</button>
-        </div>
-        ${tournamentCards(state.tournaments.slice(0,3))}
-      </section>
     </main>
   `;
 }
 
-function tournamentCards(items) {
-  if (!items.length) {
-    return `<div class="card text-center">
-      <div style="font-size:35px">🏟️</div>
-      <h3>No tournaments yet</h3>
-      <p class="text-muted">New tournaments will appear here.</p>
-    </div>`;
-  }
-
-  return items.map(t => `
-    <article class="tournament-card">
-      <div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap">
-        <span class="badge">${esc(t.category)}</span>
-        <span class="status">${esc(t.status)}</span>
-      </div>
-      <h2 style="margin-top:12px">${esc(t.title)}</h2>
-      <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:12px;margin:15px 0">
-        <div><small class="text-muted">Entry Fee</small><h3>${money(t.entry_fee)}</h3></div>
-        <div><small class="text-muted">Prize Pool</small><h3 style="color:#16e58b">${money(t.prize)}</h3></div>
-        <div><small class="text-muted">Slots</small><h3>${esc(t.slots)}</h3></div>
-        <div><small class="text-muted">Match Date</small><h3>${esc(t.match_date || "To be announced")}</h3></div>
-      </div>
-      <button class="btn" onclick="joinTournament(${Number(t.id)})">Join Tournament →</button>
-    </article>
-  `).join("");
-}
-
-function tournamentsPage() {
+function authPage(register = false) {
   return `
-    <main>
-      <h1>🏆 Tournaments</h1>
-      <p class="text-muted" style="margin:8px 0 20px">Find your next FC Mobile competition.</p>
-      <div class="category-grid" style="margin-bottom:20px">
-        <button class="category" onclick="filterCategory('FC MOBILE 1V1')">
-          <div class="cat-icon">⚽</div><strong>1V1</strong>
-        </button>
-        <button class="category" onclick="filterCategory('FC MOBILE 2V2')">
-          <div class="cat-icon">🏆</div><strong>2V2</strong>
-        </button>
-      </div>
-      ${tournamentCards(state.tournaments)}
-    </main>
-  `;
-}
+    <main class="container">
+      <form class="form-box" id="authForm">
+        <h2>${register ? "Create Account" : "Welcome Back"}</h2>
 
-function authPage() {
-  const register = state.authMode === "register";
+        ${
+          register
+            ? `<div class="field">
+                <label>Your Name</label>
+                <input name="name" required maxlength="60">
+              </div>`
+            : ""
+        }
 
-  return `
-    <main style="max-width:480px">
-      <div class="card">
-        <div class="text-center" style="margin-bottom:20px">
-          <div style="font-size:48px">⚽</div>
-          <h1>${register ? "Create Account" : "Welcome Back"}</h1>
-          <p class="text-muted">NIROB E-SPORTS FC Mobile</p>
-        </div>
-
-        <form id="authForm">
-          ${register ? `
-            <label>Full Name</label>
-            <input name="name" placeholder="Enter your name" required maxlength="60">
-          ` : ""}
+        <div class="field">
           <label>Email Address</label>
-          <input name="email" type="email" placeholder="Enter your email" required>
-          <label>Password</label>
-          <input name="password" type="password" placeholder="Minimum 8 characters" required minlength="8">
-          <button class="btn" type="submit">${register ? "Create Account" : "Login"}</button>
-        </form>
+          <input type="email" name="email" required>
+        </div>
 
-        <p class="text-center" style="margin-top:18px">
-          ${register ? "Already have an account?" : "New to NES?"}
-          <button class="secondary" onclick="switchAuth('${register ? "login" : "register"}')">
-            ${register ? "Login" : "Register"}
-          </button>
+        <div class="field">
+          <label>Password (minimum 8 characters)</label>
+          <input type="password" name="password" minlength="8" required>
+        </div>
+
+        <button class="btn" type="submit">
+          ${register ? "Register" : "Login"}
+        </button>
+
+        <p class="switch" data-page="${register ? "login" : "register"}">
+          ${register ? "Already have an account? Login" : "New player? Create an account"}
         </p>
-      </div>
+      </form>
     </main>
   `;
 }
 
 function dashboardPage() {
   return `
-    <main>
-      <div class="card">
-        <h1>👋 Hello, ${esc(state.user.name)}</h1>
-        <p class="text-muted">${esc(state.user.email)}</p>
-        <span class="badge">PLAYER ACCOUNT</span>
+    <main class="container">
+      <div class="section-head">
+        <h2>Player <span>Dashboard</span></h2>
       </div>
-      <section>
-        <h2 style="margin-bottom:15px">My Registrations</h2>
-        <div id="myRegistrations" class="card">Loading registrations...</div>
-      </section>
+
+      <div class="card">
+        <h3>Welcome, ${esc(state.user.name)}</h3>
+        <p>${esc(state.user.email)}</p>
+        <p>Account Type: ${esc(state.user.role)}</p>
+      </div>
+
+      <div class="section-head">
+        <h2>My <span>Registrations</span></h2>
+      </div>
+
+      ${
+        state.registrations.length
+          ? `<div class="grid">
+              ${state.registrations.map(r => `
+                <article class="card">
+                  <h3>${esc(r.title)}</h3>
+                  <p>${esc(r.category)}</p>
+                  <p>FC ID: ${esc(r.fc_id)}</p>
+                  <p>Entry Fee: ${money(r.entry_fee)}</p>
+                  <p>Status:
+                    <span class="status ${esc(r.status)}">${esc(r.status)}</span>
+                  </p>
+                </article>
+              `).join("")}
+            </div>`
+          : `<div class="empty">You have not joined any tournament yet.</div>`
+      }
     </main>
   `;
 }
 
-async function loadMyRegistrations() {
-  try {
-    const rows = await api("/api/my-registrations");
-    const target = $("#myRegistrations");
-    if (!target) return;
-
-    target.innerHTML = rows.length ? rows.map(r => `
-      <div style="padding:12px 0;border-bottom:1px solid #29394a">
-        <h3>${esc(r.title)}</h3>
-        <p class="text-muted">${esc(r.category)} • FC ID: ${esc(r.fc_id)}</p>
-        <p>Status: <span class="badge">${esc(r.status)}</span></p>
+function adminPage() {
+  return `
+    <main class="container">
+      <div class="section-head">
+        <h2>Admin <span>Panel</span></h2>
       </div>
-    `).join("") : "You haven't joined any tournaments yet.";
-  } catch (error) {
-    notice(error.message, true);
+
+      <div class="notice">
+        Manage tournaments, player registrations and payment information.
+      </div>
+
+      <form class="card" id="tournamentForm">
+        <h3>Create Tournament</h3>
+
+        <div class="field">
+          <label>Tournament Name</label>
+          <input name="title" required maxlength="100">
+        </div>
+
+        <div class="field">
+          <label>Category</label>
+          <select name="category" required>
+            <option value="FC MOBILE 1V1">FC Mobile 1V1</option>
+            <option value="FC MOBILE 2V2">FC Mobile 2V2</option>
+          </select>
+        </div>
+
+        <div class="field">
+          <label>Entry Fee (BDT)</label>
+          <input name="entry_fee" type="number" min="0" value="0">
+        </div>
+
+        <div class="field">
+          <label>Prize Pool (BDT)</label>
+          <input name="prize" type="number" min="0" value="0">
+        </div>
+
+        <div class="field">
+          <label>Total Slots</label>
+          <input name="slots" type="number" min="2" value="32">
+        </div>
+
+        <div class="field">
+          <label>Match Date</label>
+          <input name="match_date" type="datetime-local">
+        </div>
+
+        <button class="btn">Create Tournament</button>
+      </form>
+
+      <div class="section-head">
+        <h2>Manage <span>Tournaments</span></h2>
+      </div>
+
+      <div class="grid">
+        ${
+          state.tournaments.map(t => `
+            <article class="card">
+              <h3>${esc(t.title)}</h3>
+              <p>${esc(t.category)}</p>
+              <p>Entry: ${money(t.entry_fee)}</p>
+              <button class="btn danger" data-delete="${t.id}">Delete</button>
+            </article>
+          `).join("") || `<div class="empty">No tournaments created.</div>`
+        }
+      </div>
+
+      <div class="section-head">
+        <h2>Player <span>Registrations</span></h2>
+      </div>
+
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Player</th>
+              <th>Email</th>
+              <th>Tournament</th>
+              <th>FC ID</th>
+              <th>Phone</th>
+              <th>Status</th>
+              <th>Action</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${
+              state.adminRegistrations.map(r => `
+                <tr>
+                  <td>${esc(r.name)}</td>
+                  <td>${esc(r.email)}</td>
+                  <td>${esc(r.title)}</td>
+                  <td>${esc(r.fc_id)}</td>
+                  <td>${esc(r.phone)}</td>
+                  <td>${esc(r.status)}</td>
+                  <td>
+                    <div class="actions">
+                      <button class="btn" data-status="${r.id}" data-value="approved">Approve</button>
+                      <button class="btn danger" data-status="${r.id}" data-value="rejected">Reject</button>
+                    </div>
+                  </td>
+                </tr>
+              `).join("") || `<tr><td colspan="7">No registrations yet.</td></tr>`
+            }
+          </tbody>
+        </table>
+      </div>
+
+      <div class="section-head">
+        <h2>Payment <span>Settings</span></h2>
+      </div>
+
+      <form class="card" id="settingsForm">
+        <div class="field">
+          <label>bKash Number</label>
+          <input name="bkash_number" value="${esc(state.settings.bkash_number || "")}">
+        </div>
+        <div class="field">
+          <label>Nagad Number</label>
+          <input name="nagad_number" value="${esc(state.settings.nagad_number || "")}">
+        </div>
+        <div class="field">
+          <label>Rocket Number</label>
+          <input name="rocket_number" value="${esc(state.settings.rocket_number || "")}">
+        </div>
+        <div class="field">
+          <label>Home Notice</label>
+          <textarea name="home_notice">${esc(state.settings.home_notice || "")}</textarea>
+        </div>
+        <button class="btn">Save Settings</button>
+      </form>
+    </main>
+  `;
+}
+
+function render() {
+  let content = "";
+
+  if (state.page === "home") content = homePage();
+  if (state.page === "login") content = authPage(false);
+  if (state.page === "register") content = authPage(true);
+  if (state.page === "dashboard") content = dashboardPage();
+  if (state.page === "admin") content = adminPage();
+
+  app.innerHTML = `
+    ${header()}
+    ${content}
+    <footer>
+      © ${new Date().getFullYear()} NIROB E-SPORTS | FC Mobile
+    </footer>
+  `;
+}
+
+async function loadTournaments() {
+  state.tournaments = await api("/api/tournaments");
+}
+
+async function loadDashboard() {
+  state.registrations = await api("/api/my-registrations");
+}
+
+async function loadAdmin() {
+  state.adminRegistrations = await api("/api/admin/registrations");
+}
+
+async function refresh() {
+  const data = await api("/api/me");
+
+  state.user = data.user;
+  state.settings = data.settings || {};
+
+  await loadTournaments();
+
+  if (state.user && state.page === "dashboard") {
+    await loadDashboard();
   }
+
+  if (state.user?.role === "admin" && state.page === "admin") {
+    await loadAdmin();
+  }
+
+  render();
 }
 
 async function joinTournament(id) {
   if (!state.user) {
-    state.page = "login";
-    state.authMode = "login";
-    render();
-    notice("Please login to join a tournament.");
-    return;
+    notify("Please login first.");
+    return go("login");
   }
-
-  const t = state.tournaments.find(x => Number(x.id) === Number(id));
-  if (!t) return;
 
   const fc_id = prompt("Enter your FC Mobile Player ID:");
   if (!fc_id || !fc_id.trim()) return;
@@ -290,246 +415,215 @@ async function joinTournament(id) {
   if (!phone || !phone.trim()) return;
 
   try {
-    await api(`/api/tournaments/${id}/join`, {
+    const result = await api(`/api/tournaments/${id}/join`, {
       method: "POST",
-      body: JSON.stringify({fc_id:fc_id.trim(),phone:phone.trim()})
+      body: JSON.stringify({
+        fc_id: fc_id.trim(),
+        phone: phone.trim()
+      })
     });
-    notice("Registration submitted successfully!");
+
+    notify(result.message || "Registration submitted!");
+    await loadDashboard();
+    go("dashboard");
   } catch (error) {
-    notice(error.message, true);
+    notify(error.message);
   }
 }
 
-function adminPage() {
-  return `
-    <main>
-      <h1>🛡️ Admin Panel</h1>
-      <p class="text-muted" style="margin:8px 0 20px">Manage your FC Mobile tournaments.</p>
+app.addEventListener("click", async event => {
+  const pageButton = event.target.closest("[data-page]");
+  const categoryButton = event.target.closest("[data-category]");
+  const joinButton = event.target.closest("[data-join]");
+  const deleteButton = event.target.closest("[data-delete]");
+  const statusButton = event.target.closest("[data-status]");
+  const actionButton = event.target.closest("[data-action]");
 
-      <div class="admin-panel">
-        <div class="admin-tabs">
-          <button class="${state.adminTab === "tournaments" ? "active" : ""}" onclick="adminTab('tournaments')">Tournaments</button>
-          <button class="${state.adminTab === "registrations" ? "active" : ""}" onclick="adminTab('registrations')">Players</button>
-          <button class="${state.adminTab === "settings" ? "active" : ""}" onclick="adminTab('settings')">Settings</button>
-        </div>
-        <div id="adminContent">Loading...</div>
-      </div>
-    </main>
-  `;
-}
+  if (pageButton) {
+    const page = pageButton.dataset.page;
 
-async function loadAdminContent() {
-  const target = $("#adminContent");
-  if (!target) return;
-
-  try {
-    if (state.adminTab === "tournaments") {
-      target.innerHTML = `
-        <h2>Create Tournament</h2>
-        <form id="tournamentForm" style="margin:15px 0 25px">
-          <label>Tournament Name</label>
-          <input name="title" placeholder="NES FC Mobile Championship" required>
-          <label>Category</label>
-          <select name="category" required>
-            <option value="FC MOBILE 1V1">FC Mobile 1V1</option>
-            <option value="FC MOBILE 2V2">FC Mobile 2V2</option>
-          </select>
-          <label>Entry Fee (৳)</label>
-          <input name="entry_fee" type="number" min="0" value="0">
-          <label>Prize Pool (৳)</label>
-          <input name="prize" type="number" min="0" value="0">
-          <label>Slots</label>
-          <input name="slots" type="number" min="2" value="32">
-          <label>Match Date</label>
-          <input name="match_date" type="datetime-local">
-          <button class="btn" type="submit">Create Tournament</button>
-        </form>
-        <h2>Existing Tournaments</h2>
-        ${tournamentCards(state.tournaments)}
-        <div id="deleteList">
-          ${state.tournaments.map(t => `
-            <button class="secondary" style="margin:4px" onclick="deleteTournament(${Number(t.id)})">
-              Delete #${Number(t.id)}
-            </button>
-          `).join("")}
-        </div>
-      `;
+    if (page === "dashboard" && !state.user) {
+      return go("login");
     }
 
-    if (state.adminTab === "registrations") {
-      const rows = await api("/api/admin/registrations");
-      target.innerHTML = rows.length ? rows.map(r => `
-        <div class="card">
-          <h3>${esc(r.name)} — ${esc(r.title)}</h3>
-          <p>Email: ${esc(r.email)}</p>
-          <p>FC ID: ${esc(r.fc_id)}</p>
-          <p>Phone: ${esc(r.phone)}</p>
-          <p>Status: ${esc(r.status)}</p>
-          <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px">
-            <button class="btn" onclick="updateRegistration(${Number(r.id)},'approved')">Approve</button>
-            <button class="secondary" onclick="updateRegistration(${Number(r.id)},'rejected')">Reject</button>
-          </div>
-        </div>
-      `).join("") : `<div class="card">No registrations yet.</div>`;
+    if (page === "admin" && state.user?.role !== "admin") {
+      return notify("Admin access required.");
     }
 
-    if (state.adminTab === "settings") {
-      const settings = await api("/api/admin/settings");
-      target.innerHTML = `
-        <h2>Website Settings</h2>
-        <form id="settingsForm" style="margin-top:15px">
-          <label>Website Name</label>
-          <input name="site_name" value="${esc(settings.site_name)}">
-          <label>Logo Text</label>
-          <input name="logo_text" value="${esc(settings.logo_text)}">
-          <label>Home Notice</label>
-          <textarea name="home_notice">${esc(settings.home_notice)}</textarea>
-          <label>bKash Number</label>
-          <input name="bkash_number" value="${esc(settings.bkash_number)}">
-          <label>Nagad Number</label>
-          <input name="nagad_number" value="${esc(settings.nagad_number)}">
-          <label>Rocket Number</label>
-          <input name="rocket_number" value="${esc(settings.rocket_number)}">
-          <button class="btn" type="submit">Save Settings</button>
-        </form>
-      `;
+    state.page = page;
+
+    if (page === "dashboard") {
+      try {
+        await loadDashboard();
+      } catch (error) {
+        notify(error.message);
+      }
     }
-  } catch (error) {
-    target.innerHTML = `<div class="card">${esc(error.message)}</div>`;
-  }
-}
 
-async function deleteTournament(id) {
-  if (!confirm("Delete this tournament?")) return;
+    if (page === "admin") {
+      try {
+        await loadAdmin();
+      } catch (error) {
+        notify(error.message);
+      }
+    }
 
-  try {
-    await api(`/api/admin/tournaments/${id}`, {method:"DELETE"});
-    await loadTournaments();
-    await loadAdminContent();
-    notice("Tournament deleted.");
-  } catch (error) {
-    notice(error.message, true);
-  }
-}
-
-async function updateRegistration(id, status) {
-  try {
-    await api(`/api/admin/registrations/${id}`, {
-      method:"PATCH",
-      body:JSON.stringify({status})
-    });
-    await loadAdminContent();
-    notice("Registration updated.");
-  } catch (error) {
-    notice(error.message, true);
-  }
-}
-
-function render() {
-  let content = "";
-
-  if (state.page === "home") content = homePage();
-  else if (state.page === "tournaments") content = tournamentsPage();
-  else if (state.page === "login" || state.page === "register") content = authPage();
-  else if (state.page === "dashboard" && state.user) content = dashboardPage();
-  else if (state.page === "admin" && state.user?.role === "admin") content = adminPage();
-  else content = homePage();
-
-  app.innerHTML = header() + content + footer();
-
-  if (state.page === "dashboard") loadMyRegistrations();
-  if (state.page === "admin") loadAdminContent();
-}
-
-function go(page) {
-  if ((page === "dashboard" || page === "admin") && !state.user) {
-    page = "login";
+    return render();
   }
 
-  if (page === "admin" && state.user?.role !== "admin") {
-    notice("Admin access required.", true);
-    return;
+  if (categoryButton) {
+    state.category = categoryButton.dataset.category;
+    return render();
   }
 
-  state.page = page;
-  render();
-  window.scrollTo(0,0);
-}
-
-function switchAuth(mode) {
-  state.authMode = mode;
-  state.page = mode;
-  render();
-}
-
-function filterCategory(category) {
-  state.tournaments = state.tournaments.filter(t => t.category === category);
-  state.page = "tournaments";
-  render();
-  loadTournaments().catch(() => {});
-}
-
-async function logout() {
-  try {
-    await api("/api/logout", {method:"POST"});
-    state.user = null;
-    state.page = "home";
-    await loadTournaments();
-    render();
-    notice("Logged out successfully.");
-  } catch (error) {
-    notice(error.message, true);
+  if (joinButton) {
+    return joinTournament(joinButton.dataset.join);
   }
-}
 
-function adminTab(tab) {
-  state.adminTab = tab;
-  render();
-}
+  if (deleteButton) {
+    if (!confirm("Delete this tournament?")) return;
 
-document.addEventListener("submit", async event => {
-  event.preventDefault();
-  const form = event.target;
-  const values = Object.fromEntries(new FormData(form).entries());
+    try {
+      await api(`/api/admin/tournaments/${deleteButton.dataset.delete}`, {
+        method: "DELETE"
+      });
+      notify("Tournament deleted.");
+      await loadTournaments();
+      render();
+    } catch (error) {
+      notify(error.message);
+    }
+  }
 
-  try {
-    if (form.id === "authForm") {
-      const register = state.authMode === "register";
-      const data = await api(register ? "/api/register" : "/api/login", {
-        method:"POST",
-        body:JSON.stringify(values)
+  if (statusButton) {
+    try {
+      await api(`/api/admin/registrations/${statusButton.dataset.status}`, {
+        method: "PATCH",
+        body: JSON.stringify({
+          status: statusButton.dataset.value
+        })
       });
 
-      state.user = data.user;
-      state.settings = data.settings || state.settings;
+      notify("Registration updated.");
+      await loadAdmin();
+      render();
+    } catch (error) {
+      notify(error.message);
+    }
+  }
+
+  if (actionButton?.dataset.action === "logout") {
+    try {
+      await api("/api/logout", { method: "POST" });
+      state.user = null;
       state.page = "home";
-      await loadTournaments();
-      render();
-      notice("Welcome to NIROB E-SPORTS!");
+      await refresh();
+    } catch (error) {
+      notify(error.message);
     }
-
-    if (form.id === "tournamentForm") {
-      await api("/api/admin/tournaments", {
-        method:"POST",
-        body:JSON.stringify(values)
-      });
-      await loadTournaments();
-      await loadAdminContent();
-      notice("Tournament created!");
-    }
-
-    if (form.id === "settingsForm") {
-      await api("/api/admin/settings", {
-        method:"PUT",
-        body:JSON.stringify(values)
-      });
-      state.settings = await api("/api/admin/settings");
-      render();
-      notice("Settings saved!");
-    }
-  } catch (error) {
-    notice(error.message, true);
   }
 });
 
-init();
+app.addEventListener("submit", async event => {
+  event.preventDefault();
+
+  if (event.target.id === "authForm") {
+    const form = new FormData(event.target);
+    const isRegister = state.page === "register";
+
+    const body = {
+      email: form.get("email"),
+      password: form.get("password")
+    };
+
+    if (isRegister) body.name = form.get("name");
+
+    try {
+      await api(isRegister ? "/api/register" : "/api/login", {
+        method: "POST",
+        body: JSON.stringify(body)
+      });
+
+      state.page = "home";
+      notify(isRegister ? "Account created!" : "Login successful!");
+      await refresh();
+    } catch (error) {
+      notify(error.message);
+    }
+  }
+
+  if (event.target.id === "tournamentForm") {
+    if (state.user?.role !== "admin") {
+      return notify("Admin access required.");
+    }
+
+    const form = new FormData(event.target);
+
+    const body = {
+      title: form.get("title"),
+      category: form.get("category"),
+      entry_fee: Number(form.get("entry_fee")),
+      prize: Number(form.get("prize")),
+      slots: Number(form.get("slots")),
+      match_date: form.get("match_date")
+    };
+
+    try {
+      await api("/api/admin/tournaments", {
+        method: "POST",
+        body: JSON.stringify(body)
+      });
+
+      notify("Tournament created!");
+      await loadTournaments();
+      render();
+    } catch (error) {
+      notify(error.message);
+    }
+  }
+
+  if (event.target.id === "settingsForm") {
+    if (state.user?.role !== "admin") {
+      return notify("Admin access required.");
+    }
+
+    const form = new FormData(event.target);
+
+    const body = {
+      bkash_number: form.get("bkash_number"),
+      nagad_number: form.get("nagad_number"),
+      rocket_number: form.get("rocket_number"),
+      home_notice: form.get("home_notice")
+    };
+
+    try {
+      await api("/api/admin/settings", {
+        method: "PUT",
+        body: JSON.stringify(body)
+      });
+
+      notify("Settings saved!");
+      await refresh();
+    } catch (error) {
+      notify(error.message);
+    }
+  }
+});
+
+async function start() {
+  try {
+    await refresh();
+  } catch (error) {
+    app.innerHTML = `
+      <main class="container">
+        <div class="empty">
+          <h2>Website could not load</h2>
+          <p>${esc(error.message)}</p>
+          <button class="btn" onclick="location.reload()">Try Again</button>
+        </div>
+      </main>
+    `;
+  }
+}
+
+start();
