@@ -10,6 +10,7 @@ const path = require("path");
 const fs = require("fs");
 
 const app = express();
+app.set("trust proxy", 1);
 const PORT = Number(process.env.PORT || 3000);
 const isProd = process.env.NODE_ENV === "production";
 const dataDir = path.join(__dirname, "data");
@@ -137,15 +138,6 @@ app.post("/api/login",authLimiter,async(req,res)=>{
 });
 
 app.post("/api/logout",requireAuth,(req,res)=>req.session.destroy(()=>res.json({ok:true})));           
-
-req.session.save((err) => {
-  if (err) {
-    return res.status(500).json({error: "Login session save failed."});
-  }
-  res.json({user: safeUser(u)});
-});
-app.post("/api/logout",requireAuth,(req,res)=>req.session.destroy(()=>res.json({ok:true})));
-
 app.get("/api/banners",(req,res)=>res.json(db.prepare("SELECT * FROM banners WHERE active=1 ORDER BY id DESC").all()));
 app.get("/api/notices",(req,res)=>res.json(db.prepare("SELECT * FROM notices WHERE active=1 ORDER BY id DESC LIMIT 10").all()));
 app.get("/api/categories",(req,res)=>res.json(["BR RANK","CS RANK","BR SOLO","BR DUO","BR SQUAD","CLASH SQUAD","LONE WOLF","CS 2 VS 2"]));
