@@ -470,3 +470,5 @@ app.get("*", (req, res) => {
 app.listen(PORT, () => {
   console.log("NES FC Mobile server running on " + PORT);
 });
+
+app.listen(PORT, "0.0.0.0", () => {
