@@ -8,8 +8,8 @@ const helmet = require("helmet");
 const rateLimit = require("express-rate-limit");
 const path = require("path");
 const fs = require("fs");
-
 const app = express();
+app.set("trust proxy", 1);
 const PORT = Number(process.env.PORT || 3000);
 const isProd = process.env.NODE_ENV === "production";
 const dataDir = path.join(__dirname, "data");
