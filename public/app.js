@@ -12,8 +12,16 @@ function nav(){if(!state.user)return "";const items=[["play","🎮","Play"],["my
 function shell(content){
  app.innerHTML=header()+`<main>${content}</main>`+nav();
 }
-
 function categoryTiles(){
+ const cats=["FC MOBILE 1V1","FC MOBILE 2V2"];
+ return `<div class="category-grid">
+ ${cats.map(c=>`<button class="category" onclick="openCategory('${c}')">
+ <div class="cat-icon">⚽</div>
+ <strong>${c}</strong>
+ <small>Explore tournaments →</small>
+ </button>`).join("")}
+ </div>`;
+}
  return `<div class="category-grid">
  ${["BR RANK","CS RANK","BR SOLO","BR DUO","BR SQUAD","CLASH SQUAD","LONE WOLF","CS 2 VS 2"].map(c=>`<button class="category" onclick="openCategory('${c}')"><div class="cat-icon">${c==="CS RANK"?'<img src="/1793772748832.jpg" style="width:100%;height:100%;object-fit:cover;border-radius:12px">':"🎮"}</div><strong>${c}</strong><small>Explore tournaments →</small></button>`).join("")}
  </div>`;
