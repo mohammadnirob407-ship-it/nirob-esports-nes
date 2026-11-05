@@ -73,10 +73,10 @@ for (const [key, value] of Object.entries(defaults)) {
 }
 
 app.use(session({
- store: new (SQLiteStore(session))({
-   db: "sessions.sqlite",
-   dir: "."
- }),
+ store: new SQLiteStore({
+  db: "sessions.sqlite",
+  dir: "."
+}),
  secret: process.env.SESSION_SECRET || "change-this-secret-before-production",
  resave: false,
  saveUninitialized: false,
