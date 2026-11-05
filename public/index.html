@@ -3,40 +3,18 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-
-  <title>NIROB E-SPORTS | FC Mobile</title>
-
-  <meta name="description" content="Play FC Mobile tournaments at NIROB E-SPORTS.">
   <meta name="theme-color" content="#080b12">
-
-  <link rel="manifest" href="/manifest.json">
+  <meta name="description" content="Join FC Mobile tournaments at NIROB E-SPORTS.">
+  <title>NIROB E-SPORTS | FC Mobile</title>
   <link rel="stylesheet" href="/style.css">
-
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700&display=swap" rel="stylesheet">
-
   <script src="/app.js" defer></script>
 </head>
-
 <body>
   <div id="app">
-    <div style="min-height:100vh;display:grid;place-items:center;background:#080b12;color:white;font-family:Arial,sans-serif;">
-      <div style="text-align:center">
-        <h1>⚽ NIROB E-SPORTS</h1>
-        <p>FC Mobile Tournament</p>
-        <p>Loading...</p>
-      </div>
+    <div class="loading">
+      <h1>⚽ NIROB E-SPORTS</h1>
+      <p>Loading FC Mobile tournaments...</p>
     </div>
   </div>
-
-  <script>
-    if ("serviceWorker" in navigator) {
-      window.addEventListener("load", () => {
-        navigator.serviceWorker.register("/sw.js")
-          .catch(error => console.log("Service worker:", error));
-      });
-    }
-  </script>
 </body>
 </html>
