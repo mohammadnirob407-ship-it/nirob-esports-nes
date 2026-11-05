@@ -1,95 +1,535 @@
-const app=document.getElementById("app");
-let state={user:null,settings:{},page:"home",category:null,match:null,authMode:"login",adminTab:"matches",adminMatches:[],registrations:[],settingsForm:{}};
-const $=s=>document.querySelector(s);
-const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
-async function api(url,opts={}){const r=await fetch("/api"+url,{credentials:"same-origin",headers:{"Content-Type":"application/json",...(opts.headers||{})},...opts});let d={};try{d=await r.json()}catch{}if(!r.ok)throw Error(d.error||"Request failed");return d}
-function toast(t){const el=$("#toast");el.textContent=t;el.classList.add("show");setTimeout(()=>el.classList.remove("show"),2800)}
-function go(page){state.page=page;state.category=null;state.match=null;render()}
-function requireLogin(){if(!state.user){state.page="auth";render();toast("Please login to continue.");return false}return true}
-function dateFmt(v){return new Date(v).toLocaleString("en-BD",{dateStyle:"medium",timeStyle:"short"})}
-function header(){return `<header class="topbar"><div class="brand" onclick="go('home')" style="cursor:pointer"><div class="logo">${esc(state.settings.logo_text||"NES")}</div><div>${esc(state.settings.site_name||"NIROB E-SPORTS")}<small>TOURNAMENT ARENA</small></div></div><div class="top-actions">${state.user?`<button class="avatar" onclick="go('profile')">${esc((state.user.name||"P")[0].toUpperCase())}</button>`:`<button class="btn btn-primary" onclick="go('auth')">Login</button>`}</div></header>`}
-function nav(){if(!state.user)return "";const items=[["play","🎮","Play"],["my-matches","▤","My Matches"],["results","🏆","Results"],["profile","♙","Profile"]];return `<nav class="bottom-nav"><div class="nav-inner">${items.map(([p,i,l])=>`<button class="nav-item ${state.page===p?"active":""}" onclick="go('${p}')"><span>${i}</span>${l}</button>`).join("")}</div></nav>`}
-function shell(content){
- app.innerHTML=header()+`<main>${content}</main>`+nav();
+const app = document.getElementById("app");
+
+const state = {
+  user: null,
+  settings: {},
+  tournaments: [],
+  registrations: [],
+  page: "home",
+  authMode: "login",
+  adminTab: "tournaments"
+};
+
+const $ = (selector) => document.querySelector(selector);
+
+const esc = (value) => String(value ?? "").replace(/[&<>"']/g, char => ({
+  "&": "&amp;",
+  "<": "&lt;",
+  ">": "&gt;",
+  '"': "&quot;",
+  "'": "&#39;"
+}[char]));
+
+async function api(url, options = {}) {
+  const response = await fetch(url, {
+    credentials: "same-origin",
+    headers: {
+      "Content-Type": "application/json",
+      ...(options.headers || {})
+    },
+    ...options
+  });
+
+  const data = await response.json().catch(() => ({}));
+
+  if (!response.ok) {
+    throw new Error(data.error || "Something went wrong");
+  }
+
+  return data;
 }
-function categoryTiles(){
- const cats=["FC MOBILE 1V1","FC MOBILE 2V2"];
- return `<div class="category-grid">
- ${cats.map(c=>`<button class="category" onclick="openCategory('${c}')">
- <div class="cat-icon">⚽</div>
- <strong>${c}</strong>
- <small>Explore tournaments →</small>
- </button>`).join("")}
- </div>`;
+
+function money(value) {
+  return "৳" + Number(value || 0).toLocaleString("en-BD");
 }
- return `<div class="category-grid">
- ${["BR RANK","CS RANK","BR SOLO","BR DUO","BR SQUAD","CLASH SQUAD","LONE WOLF","CS 2 VS 2"].map(c=>`<button class="category" onclick="openCategory('${c}')"><div class="cat-icon">${c==="CS RANK"?'<img src="/1793772748832.jpg" style="width:100%;height:100%;object-fit:cover;border-radius:12px">':"🎮"}</div><strong>${c}</strong><small>Explore tournaments →</small></button>`).join("")}
- </div>`;
-}async function home(){let [banners,notices]=await Promise.all([api("/banners"),api("/notices")]);return `<section class="hero"><div><span class="pill" style="background:#ffffff25;color:white">WELCOME TO NES</span><h1>ENTER THE ARENA.<br>OWN THE VICTORY.</h1><p>${esc(state.settings.home_notice||"Compete in exciting Free Fire tournaments and prove your skills.")}</p><button class="btn" style="background:white;color:#6039bd" onclick="go('play')">Explore Tournaments →</button></div><div class="hero-mark">🎮</div></section>
-<div class="telegram"><div><b>📢 Join our Telegram Community</b><small>Get tournament updates, notices and room announcements.</small></div><a class="btn btn-primary" href="${esc(state.settings.telegram_url||"https://t.me/")}" target="_blank" rel="noopener">Join Telegram</a></div>
-${notices.map(n=>`<div class="notice"><b>${esc(n.title)}</b><br>${esc(n.body)}</div>`).join("")}
-<div class="section-head"><h2>FREE FIRE CATEGORIES</h2><span class="pill">8 MODES</span></div>${categoryTiles()}
-<div class="section-head"><h2>About NES</h2></div><div class="panel"><b>NIROB E-SPORTS</b><p class="muted">A community tournament platform built for fair play, competitive matches and transparent results. Select a category from Play to browse available matches.</p></div>`}
-async function play(){return `<div class="page-title">Play Tournaments</div><div class="sub">Choose a game mode to view available matches.</div>${categoryTiles()}<div class="notice">Only matches in the selected category will be displayed.</div>`}
-function matchCard(m){const pct=Math.min(100,m.joined/m.player_limit*100);return `<article class="match-card"><div class="match-head"><div class="match-thumb">🔥</div><div style="min-width:0"><h3>${esc(m.title)}</h3><div class="match-date">${dateFmt(m.match_date)}</div></div><span class="match-no">#${esc(m.match_no)}</span></div><div class="stats"><div class="stat"><label>WIN PRIZE</label><b>${m.prize_pool} TK</b></div><div class="stat"><label>ENTRY TYPE</label><b>${esc(m.entry_type)}</b></div><div class="stat"><label>ENTRY FEE</label><b>${m.entry_fee} TK</b></div><div class="stat"><label>PER KILL</label><b>${m.per_kill} TK</b></div><div class="stat"><label>MAP</label><b>${esc(m.map_name)}</b></div><div class="stat"><label>VERSION</label><b>${esc(m.version)}</b></div></div><div class="progress"><span style="width:${pct}%"></span></div><div class="slotline"><span>Only ${m.remaining} spots are left</span><b>${m.joined}/${m.player_limit}</b></div><div class="countdown" data-time="${esc(m.match_date)}" style="margin-top:10px;background:#20894b;color:white;border-radius:9px;padding:10px;text-align:center;font-size:12px;font-weight:800">⏱ STARTS IN · <span>calculating…</span></div><div class="card-actions"><button class="btn btn-primary full" onclick="openMatch(${m.id})">JOIN NOW · View Details</button></div></article>`}
-async function categoryPage(){const matches=await api("/matches?category="+encodeURIComponent(state.category));return `<button class="btn btn-soft" onclick="state.category=null;go('play')">← All Categories</button><div class="page-title" style="margin-top:17px">${esc(state.category)}</div><div class="sub">Available tournaments in this category.</div>${matches.length?`<div class="cards">${matches.map(matchCard).join("")}</div>`:`<div class="empty">No matches found in this category yet.</div>`}`}
-async function matchDetails(){const m=await api("/matches/"+state.match);return `<button class="btn btn-soft" onclick="go('play')">← Back to Play</button><div class="page-title" style="margin-top:16px">${esc(m.title)}</div><div class="sub">Match #${esc(m.match_no)} · ${dateFmt(m.match_date)}</div><div class="panel"><div class="detail-grid">${[["WIN PRIZE",m.prize_pool+" TK"],["ENTRY FEE",m.entry_fee+" TK"],["ENTRY TYPE",m.entry_type],["PER KILL",m.per_kill+" TK"],["MAP",m.map_name],["VERSION",m.version],["PLAYER LIMIT",m.player_limit],["JOINED",m.joined],["AVAILABLE",m.remaining]].map(([a,b])=>`<div class="detail-cell"><small>${a}</small><b>${esc(b)}</b></div>`).join("")}</div><h3>Tournament Rules</h3><div class="rule-box">${esc(m.rules||"Play fair. No hacks, scripts or abusive behavior. Follow room instructions.")}</div>${m.room_id?`<div class="notice">Room ID: ${esc(m.room_id)} · Password: ${esc(m.room_password)}</div>`:""}<div class="section-head"><h2>Prize Details</h2></div><p class="muted">Prize pool: <b>${m.prize_pool} TK</b> · Per kill: <b>${m.per_kill} TK</b>. Final prize distribution is confirmed by the tournament owner.</p></div>
-${state.user?`<div class="panel"><h3>Register for this Match</h3><p class="sub">Complete your Free Fire details and submit your payment transaction ID. Never share your PIN or OTP.</p><form onsubmit="joinMatch(event,${m.id})"><div class="form-grid"><div class="field"><label>Free Fire In-game Name *</label><input name="ff_name" required maxlength="60"></div><div class="field"><label>Free Fire UID *</label><input name="ff_uid" required maxlength="30"></div><div class="field"><label>Team Name</label><input name="team_name" maxlength="60"></div><div class="field"><label>Match Type</label><input value="${esc(m.entry_type)}" disabled></div><div class="field"><label>Payment Method *</label><select name="payment_method" required><option value="">Select method</option><option>bKash</option><option>Nagad</option><option>Rocket</option><option>Upay</option></select></div><div class="field"><label>Transaction ID *</label><input name="transaction_id" required maxlength="80"></div></div><div class="notice">Send ${m.entry_fee} TK to the selected payment number shown in Profile / Payment Settings, then enter the transaction ID. Payment is manually verified.</div><label style="display:flex;gap:9px;font-size:12px;margin:14px 0"><input type="checkbox" name="accepted_rules" required> I have read and accept the tournament rules.</label><button class="btn btn-primary full" ${m.remaining<=0?"disabled":""}>Submit Registration</button></form></div>`:`<div class="panel"><p>Login is required before joining a tournament.</p><button class="btn btn-primary" onclick="go('auth')">Login to Join</button></div>`}`}
-async function myMatches(){const rows=await api("/my-matches");return `<div class="page-title">My Matches</div><div class="sub">Your tournament registrations and room information.</div>${rows.length?rows.map(r=>`<div class="panel"><div style="display:flex;justify-content:space-between;gap:10px"><b>${esc(r.title)}</b><span class="status ${r.payment_status}">${r.payment_status.toUpperCase()}</span></div><p class="muted">${esc(r.match_no)} · ${dateFmt(r.match_date)}</p><p>IGN: <b>${esc(r.ff_name)}</b> · UID: ${esc(r.ff_uid)}</p>${r.payment_status==="approved"&&r.room_id?`<div class="notice">Room ID: ${esc(r.room_id)}<br>Room Password: ${esc(r.room_password)}</div>`:""}<small class="muted">Transaction: ${esc(r.transaction_id)}</small></div>`).join(""):`<div class="empty">You haven't joined any tournaments yet.</div>`}`}
-async function results(){const rows=await api("/results");return `<div class="page-title">Results & Winners</div><div class="sub">Published tournament results.</div>${rows.length?`<div class="panel table-wrap"><table class="data-table"><thead><tr><th>Match</th><th>Position</th><th>Player</th><th>Kills</th><th>Prize</th></tr></thead><tbody>${rows.map(r=>`<tr><td>${esc(r.match_no)} · ${esc(r.title)}</td><td>#${r.position}</td><td>${esc(r.player_name)}</td><td>${r.kills}</td><td>${r.prize} TK</td></tr>`).join("")}</tbody></table></div>`:`<div class="empty">No results have been published yet.</div>`}`}
-async function profile(){const u=await api("/profile");return `<div class="page-title">My Profile</div><div class="sub">Manage your player account.</div><div class="panel"><div class="avatar" style="width:62px;height:62px;font-size:24px">${esc((u.name||"P")[0].toUpperCase())}</div><h2>${esc(u.name)}</h2><p class="muted">${esc(u.email)}</p><form onsubmit="saveProfile(event)"><div class="field"><label>Player Name</label><input name="name" value="${esc(u.name)}" required></div><div class="field"><label>Free Fire UID</label><input name="ff_uid" value="${esc(u.ff_uid)}"></div><div class="field"><label>Profile Photo URL</label><input name="photo_url" value="${esc(u.photo_url)}" placeholder="https://..."></div><button class="btn btn-primary">Save Profile</button></form></div><div class="panel"><h3>Payment Numbers</h3><p class="muted">Use these numbers for manual entry-fee payments. Never provide PIN or OTP.</p>${["bkash","nagad","rocket","upay"].map(k=>`<p><b>${k.toUpperCase()}:</b> ${esc(state.settings[k+"_number"]||"Not configured")}</p>`).join("")}</div><div class="card-actions">${state.user.role==="owner"?'<button class="btn btn-soft" onclick="go(\'admin\')">⚙ Owner Admin Panel</button>':""}<button class="btn btn-danger" onclick="logout()">Logout</button></div>`}
-function auth(){app.innerHTML=`<div class="auth-wrap"><div class="auth-card"><div class="auth-logo"><div class="logo">NES</div><h1>NIROB E-SPORTS</h1><p class="muted">Your tournament arena starts here.</p></div><div class="tabs"><button class="${state.authMode==="login"?"active":""}" onclick="state.authMode='login';render()">Login</button><button class="${state.authMode==="register"?"active":""}" onclick="state.authMode='register';render()">Register</button></div><form onsubmit="authSubmit(event)">${state.authMode==="register"?`<div class="field"><label>Player Name</label><input name="name" required maxlength="60"></div>`:""}<div class="field"><label>Email</label><input name="email" type="email" required></div><div class="field"><label>Password ${state.authMode==="register"?"(minimum 10 characters)":""}</label><input name="password" type="password" required minlength="${state.authMode==="register"?10:1}"></div><button class="btn btn-primary full">${state.authMode==="login"?"Login":"Create Account"}</button></form><p class="muted" style="font-size:11px;text-align:center;margin-top:16px">By continuing, you agree to play fairly and follow tournament rules.</p></div></div>`}
-async function admin(){const ov=await api("/admin/overview");return `<div class="page-title">Owner Admin Panel</div><div class="sub">Full tournament operations and platform controls.</div><div class="detail-grid">${[["PLAYERS",ov.users],["MATCHES",ov.matches],["REGISTRATIONS",ov.registrations],["PENDING PAYMENTS",ov.pending]].map(([a,b])=>`<div class="detail-cell"><small>${a}</small><b>${b}</b></div>`).join("")}</div><div class="admin-tabs">${[["matches","Tournaments"],["registrations","Registrations"],["results","Publish Results"],["settings","Website Settings"],["content","Banners & Notices"]].map(([k,v])=>`<button class="btn ${state.adminTab===k?"btn-primary":"btn-outline"}" onclick="state.adminTab='${k}';render()">${v}</button>`).join("")}</div><div id="admin-content"></div>`}
-async function renderAdminContent(){
- const el=$("#admin-content");if(!el)return;
- if(state.adminTab==="matches"){
-  const ms=await api("/admin/matches");
-  el.innerHTML=`<div class="panel"><h3>Create Tournament</h3><form class="admin-form" onsubmit="createMatch(event)">${matchFields()}<div class="field"><label>Rules</label><textarea name="rules"></textarea></div><button class="btn btn-primary">Create Match</button></form></div><div class="panel"><h3>Manage Matches</h3>${ms.map(m=>`<div style="border-bottom:1px solid var(--line);padding:12px 0"><b>${esc(m.match_no)} · ${esc(m.title)}</b><p class="muted">${dateFmt(m.match_date)} · ${m.joined}/${m.player_limit} joined</p><div class="card-actions"><button class="btn btn-outline" onclick="editMatch(${m.id})">Edit / Room Details</button><button class="btn btn-danger" onclick="deleteMatch(${m.id})">Delete</button></div></div>`).join("")}</div>`;
- }else if(state.adminTab==="registrations"){
-  const rs=await api("/admin/registrations");
-  el.innerHTML=`<div class="panel"><h3>Player Registrations</h3><div class="table-wrap"><table class="data-table"><thead><tr><th>Player</th><th>Match</th><th>Payment</th><th>Transaction</th><th>Status</th><th>Action</th></tr></thead><tbody>${rs.map(r=>`<tr><td>${esc(r.ff_name)}<br>${esc(r.ff_uid)}</td><td>${esc(r.match_no)}</td><td>${esc(r.payment_method)}</td><td>${esc(r.transaction_id)}</td><td><span class="status ${r.payment_status}">${r.payment_status}</span></td><td><select onchange="setPayment(${r.id},this.value)"><option value="">Change</option>${["pending","approved","rejected"].map(s=>`<option ${s===r.payment_status?"selected":""}>${s}</option>`).join("")}</select></td></tr>`).join("")}</tbody></table></div></div>`;
- }else if(state.adminTab==="results"){
-  const ms=await api("/admin/matches");
-  el.innerHTML=`<div class="panel"><h3>Add Winner / Result</h3><form onsubmit="publishResult(event)"><div class="field"><label>Match</label><select name="match_id" required>${ms.map(m=>`<option value="${m.id}">${esc(m.match_no)} · ${esc(m.title)}</option>`).join("")}</select></div><div class="form-grid"><div class="field"><label>Player Name</label><input name="player_name" required></div><div class="field"><label>Position</label><input name="position" type="number" min="1" required></div><div class="field"><label>Kills</label><input name="kills" type="number" min="0" value="0"></div><div class="field"><label>Prize (TK)</label><input name="prize" type="number" min="0" value="0"></div></div><div class="field"><label>Note</label><input name="note"></div><button class="btn btn-primary">Publish Result</button></form></div>`;
- }else if(state.adminTab==="settings"){
-  const s=await api("/admin/settings");
-  el.innerHTML=`<div class="panel"><h3>Website & Payment Settings</h3><form onsubmit="saveSettings(event)">${Object.entries({site_name:"Website Name",logo_text:"Logo Text",telegram_url:"Telegram URL",bkash_number:"bKash Number",nagad_number:"Nagad Number",rocket_number:"Rocket Number",upay_number:"Upay Number",home_notice:"Home Page Welcome Text"}).map(([k,l])=>`<div class="field"><label>${l}</label><input name="${k}" value="${esc(s[k]||"")}"></div>`).join("")}<button class="btn btn-primary">Save Settings</button></form></div>`;
- }else{
-  el.innerHTML=`<div class="panel"><h3>Add Banner</h3><form onsubmit="addBanner(event)"><div class="field"><label>Title</label><input name="title" required></div><div class="field"><label>Image URL</label><input name="image_url" placeholder="https://..."></div><div class="field"><label>Link URL</label><input name="link_url"></div><button class="btn btn-primary">Add Banner</button></form></div><div class="panel"><h3>Publish Notice</h3><form onsubmit="addNotice(event)"><div class="field"><label>Title</label><input name="title" required></div><div class="field"><label>Notice</label><textarea name="body" required></textarea></div><button class="btn btn-primary">Publish Notice</button></form></div>`;
- }
+
+function notice(message, error = false) {
+  const old = $("#toast");
+  if (old) old.remove();
+
+  const toast = document.createElement("div");
+  toast.id = "toast";
+  toast.textContent = message;
+  toast.style.cssText = `
+    position:fixed;z-index:9999;top:18px;left:50%;
+    transform:translateX(-50%);padding:13px 20px;
+    border-radius:10px;background:${error ? "#a62938" : "#087b50"};
+    color:white;font-weight:bold;max-width:90%;text-align:center;
+  `;
+  document.body.appendChild(toast);
+  setTimeout(() => toast.remove(), 3500);
 }
-function matchFields(){return `<div class="field"><label>Match Number</label><input name="match_no" placeholder="Auto generated"></div><div class="field"><label>Match Name</label><input name="title" required></div><div class="field"><label>Category</label><select name="category">${["BR RANK","CS RANK","BR SOLO","BR DUO","BR SQUAD","CLASH SQUAD","LONE WOLF","CS 2 VS 2"].map(x=>`<option>${x}</option>`).join("")}</select></div><div class="field"><label>Date & Time</label><input name="match_date" type="datetime-local" required></div><div class="field"><label>Entry Type</label><select name="entry_type"><option>Solo</option><option>Duo</option><option>Squad</option></select></div><div class="field"><label>Entry Fee (TK)</label><input name="entry_fee" type="number" min="0" value="20"></div><div class="field"><label>Prize Pool (TK)</label><input name="prize_pool" type="number" min="0" value="800"></div><div class="field"><label>Per Kill (TK)</label><input name="per_kill" type="number" min="0" value="10"></div><div class="field"><label>Map</label><input name="map_name" value="Bermuda"></div><div class="field"><label>Version</label><select name="version"><option>Mobile</option><option>Emulator</option></select></div><div class="field"><label>Player Limit</label><input name="player_limit" type="number" min="2" value="48"></div>`}
-async function openCategory(c){state.category=c;state.page="category";render()}
-async function openMatch(id){state.match=id;state.page="match";render()}
-async function joinMatch(e,id){e.preventDefault();const f=Object.fromEntries(new FormData(e.target));f.accepted_rules=!!f.accepted_rules;try{const d=await api(`/matches/${id}/join`,{method:"POST",body:JSON.stringify(f)});toast(d.message);go("my-matches")}catch(x){toast(x.message)}}
-async function authSubmit(e){e.preventDefault();const f=Object.fromEntries(new FormData(e.target));try{const d=await api(state.authMode==="login"?"/login":"/register",{method:"POST",body:JSON.stringify(f)});state.user=d.user;go("home")}catch(x){toast(x.message)}}
-async function logout(){await api("/logout",{method:"POST"});state.user=null;go("auth")}
-async function saveProfile(e){e.preventDefault();const d=await api("/profile",{method:"PATCH",body:JSON.stringify(Object.fromEntries(new FormData(e.target)))});state.user=d;toast("Profile updated.");render()}
-async function createMatch(e){e.preventDefault();try{await api("/admin/matches",{method:"POST",body:JSON.stringify(Object.fromEntries(new FormData(e.target)))});toast("Tournament created.");renderAdminContent()}catch(x){toast(x.message)}}
-async function editMatch(id){const all=await api("/admin/matches");const m=all.find(x=>x.id===id);const values={room_id:prompt("Room ID",m.room_id||""),room_password:prompt("Room Password",m.room_password||""),entry_fee:prompt("Entry Fee",m.entry_fee),prize_pool:prompt("Prize Pool",m.prize_pool),per_kill:prompt("Per Kill",m.per_kill),player_limit:prompt("Player Limit",m.player_limit),map_name:prompt("Map",m.map_name),status:prompt("Status: open / closed",m.status)};try{await api("/admin/matches/"+id,{method:"PUT",body:JSON.stringify(values)});toast("Match updated.");renderAdminContent()}catch(e){toast(e.message)}}
-async function deleteMatch(id){if(!confirm("Delete this match and its registrations/results?"))return;await api("/admin/matches/"+id,{method:"DELETE"});toast("Match deleted.");renderAdminContent()}
-async function setPayment(id,status){if(!status)return;try{await api("/admin/registrations/"+id,{method:"PATCH",body:JSON.stringify({payment_status:status})});toast("Payment status updated.")}catch(e){toast(e.message)}}
-async function publishResult(e){e.preventDefault();try{await api("/admin/results",{method:"POST",body:JSON.stringify(Object.fromEntries(new FormData(e.target)))});toast("Result published.");e.target.reset()}catch(x){toast(x.message)}}
-async function saveSettings(e){e.preventDefault();try{state.settings=await api("/admin/settings",{method:"PUT",body:JSON.stringify(Object.fromEntries(new FormData(e.target)))});toast("Settings saved.");render()}catch(x){toast(x.message)}}
-async function addBanner(e){e.preventDefault();try{await api("/admin/banners",{method:"POST",body:JSON.stringify(Object.fromEntries(new FormData(e.target)))});toast("Banner added.");e.target.reset()}catch(x){toast(x.message)}}
-async function addNotice(e){e.preventDefault();try{await api("/admin/notices",{method:"POST",body:JSON.stringify(Object.fromEntries(new FormData(e.target)))});toast("Notice published.");e.target.reset()}catch(x){toast(x.message)}}
-async function render(){
- if(state.page==="auth")return auth();
- if(!state.user && state.page!=="home" && state.page!=="play" && state.page!=="category"){state.page="auth";return auth()}
- try{
- let content="";
- if(state.page==="home")content=await home();
- else if(state.page==="play")content=await play();
- else if(state.page==="category")content=await categoryPage();
- else if(state.page==="match")content=await matchDetails();
- else if(state.page==="my-matches"){if(!requireLogin())return;content=await myMatches()}
- else if(state.page==="results")content=await results();
- else if(state.page==="profile"){if(!requireLogin())return;content=await profile()}
- else if(state.page==="admin"){if(!requireLogin())return;if(state.user.role!=="owner"){toast("Owner access only.");state.page="home";return render()}content=await admin()}
- shell(content);
- if(state.page==="admin")await renderAdminContent();
- }catch(e){shell(`<div class="empty">${esc(e.message)}<br><button class="btn btn-primary" onclick="render()">Retry</button></div>`)}
+
+async function init() {
+  try {
+    const data = await api("/api/me");
+    state.user = data.user;
+    state.settings = data.settings || {};
+    await loadTournaments();
+    render();
+  } catch (error) {
+    app.innerHTML = `<main><div class="card">Website loading failed. Please refresh.</div></main>`;
+  }
 }
-async function init(){try{const d=await api("/me");state.user=d.user;state.settings=d.settings||{};state.page=state.user?"home":"auth";render()}catch(e){auth()}}
-window.go=go;window.render=render;window.openCategory=openCategory;window.openMatch=openMatch;window.joinMatch=joinMatch;window.authSubmit=authSubmit;window.logout=logout;window.saveProfile=saveProfile;window.createMatch=createMatch;window.editMatch=editMatch;window.deleteMatch=deleteMatch;window.setPayment=setPayment;window.publishResult=publishResult;window.saveSettings=saveSettings;window.addBanner=addBanner;window.addNotice=addNotice;window.state=state;
+
+async function loadTournaments() {
+  state.tournaments = await api("/api/tournaments");
+}
+
+function header() {
+  return `
+    <header style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;">
+      <a href="#" onclick="go('home');return false;" class="logo">
+        ⚽ ${esc(state.settings.logo_text || "NES")}
+        <small style="display:block;font-size:12px;color:white">
+          ${esc(state.settings.site_name || "NIROB E-SPORTS")}
+        </small>
+      </a>
+      <nav style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        <button class="secondary" onclick="go('home')">Home</button>
+        <button class="secondary" onclick="go('tournaments')">Tournaments</button>
+        ${state.user ? `
+          <button class="secondary" onclick="go('dashboard')">My Account</button>
+          ${state.user.role === "admin" ? `<button class="secondary" onclick="go('admin')">Admin</button>` : ""}
+          <button class="btn" onclick="logout()">Logout</button>
+        ` : `
+          <button class="secondary" onclick="go('login')">Login</button>
+          <button class="btn" onclick="go('register')">Join Now</button>
+        `}
+      </nav>
+    </header>
+  `;
+}
+
+function footer() {
+  return `
+    <footer>
+      <h3 style="color:#16e58b">NIROB E-SPORTS</h3>
+      <p>FC Mobile Tournament Community</p>
+      <p style="margin-top:8px">Play Fair • Compete • Win</p>
+      <small>© ${new Date().getFullYear()} NIROB E-SPORTS. All rights reserved.</small>
+    </footer>
+  `;
+}
+
+function homePage() {
+  return `
+    <main>
+      <section class="hero">
+        <div style="font-size:45px">⚽ 🏆</div>
+        <p style="color:#16e58b;font-weight:bold">WELCOME TO NES</p>
+        <h1>YOUR GAME.<br>YOUR GLORY.</h1>
+        <p>Join FC Mobile tournaments and compete with the best players.</p>
+        <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:22px">
+          <button class="btn" onclick="go('tournaments')">Explore Tournaments →</button>
+          ${state.user ? "" : `<button class="secondary" onclick="go('register')">Create Account</button>`}
+        </div>
+      </section>
+
+      <div class="notice">
+        📢 ${esc(state.settings.home_notice || "Welcome to NIROB E-SPORTS!")}
+      </div>
+
+      <section>
+        <h2 style="margin-bottom:15px">⚡ Choose Your Mode</h2>
+        <div class="category-grid">
+          <button class="category" onclick="filterCategory('FC MOBILE 1V1')">
+            <div class="cat-icon">⚽</div>
+            <strong>FC MOBILE 1V1</strong>
+            <small>One versus one</small>
+          </button>
+          <button class="category" onclick="filterCategory('FC MOBILE 2V2')">
+            <div class="cat-icon">🏆</div>
+            <strong>FC MOBILE 2V2</strong>
+            <small>Team versus team</small>
+          </button>
+        </div>
+      </section>
+
+      <section>
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:15px">
+          <h2>🔥 Latest Tournaments</h2>
+          <button class="secondary" onclick="go('tournaments')">View All</button>
+        </div>
+        ${tournamentCards(state.tournaments.slice(0,3))}
+      </section>
+    </main>
+  `;
+}
+
+function tournamentCards(items) {
+  if (!items.length) {
+    return `<div class="card text-center">
+      <div style="font-size:35px">🏟️</div>
+      <h3>No tournaments yet</h3>
+      <p class="text-muted">New tournaments will appear here.</p>
+    </div>`;
+  }
+
+  return items.map(t => `
+    <article class="tournament-card">
+      <div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap">
+        <span class="badge">${esc(t.category)}</span>
+        <span class="status">${esc(t.status)}</span>
+      </div>
+      <h2 style="margin-top:12px">${esc(t.title)}</h2>
+      <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:12px;margin:15px 0">
+        <div><small class="text-muted">Entry Fee</small><h3>${money(t.entry_fee)}</h3></div>
+        <div><small class="text-muted">Prize Pool</small><h3 style="color:#16e58b">${money(t.prize)}</h3></div>
+        <div><small class="text-muted">Slots</small><h3>${esc(t.slots)}</h3></div>
+        <div><small class="text-muted">Match Date</small><h3>${esc(t.match_date || "To be announced")}</h3></div>
+      </div>
+      <button class="btn" onclick="joinTournament(${Number(t.id)})">Join Tournament →</button>
+    </article>
+  `).join("");
+}
+
+function tournamentsPage() {
+  return `
+    <main>
+      <h1>🏆 Tournaments</h1>
+      <p class="text-muted" style="margin:8px 0 20px">Find your next FC Mobile competition.</p>
+      <div class="category-grid" style="margin-bottom:20px">
+        <button class="category" onclick="filterCategory('FC MOBILE 1V1')">
+          <div class="cat-icon">⚽</div><strong>1V1</strong>
+        </button>
+        <button class="category" onclick="filterCategory('FC MOBILE 2V2')">
+          <div class="cat-icon">🏆</div><strong>2V2</strong>
+        </button>
+      </div>
+      ${tournamentCards(state.tournaments)}
+    </main>
+  `;
+}
+
+function authPage() {
+  const register = state.authMode === "register";
+
+  return `
+    <main style="max-width:480px">
+      <div class="card">
+        <div class="text-center" style="margin-bottom:20px">
+          <div style="font-size:48px">⚽</div>
+          <h1>${register ? "Create Account" : "Welcome Back"}</h1>
+          <p class="text-muted">NIROB E-SPORTS FC Mobile</p>
+        </div>
+
+        <form id="authForm">
+          ${register ? `
+            <label>Full Name</label>
+            <input name="name" placeholder="Enter your name" required maxlength="60">
+          ` : ""}
+          <label>Email Address</label>
+          <input name="email" type="email" placeholder="Enter your email" required>
+          <label>Password</label>
+          <input name="password" type="password" placeholder="Minimum 8 characters" required minlength="8">
+          <button class="btn" type="submit">${register ? "Create Account" : "Login"}</button>
+        </form>
+
+        <p class="text-center" style="margin-top:18px">
+          ${register ? "Already have an account?" : "New to NES?"}
+          <button class="secondary" onclick="switchAuth('${register ? "login" : "register"}')">
+            ${register ? "Login" : "Register"}
+          </button>
+        </p>
+      </div>
+    </main>
+  `;
+}
+
+function dashboardPage() {
+  return `
+    <main>
+      <div class="card">
+        <h1>👋 Hello, ${esc(state.user.name)}</h1>
+        <p class="text-muted">${esc(state.user.email)}</p>
+        <span class="badge">PLAYER ACCOUNT</span>
+      </div>
+      <section>
+        <h2 style="margin-bottom:15px">My Registrations</h2>
+        <div id="myRegistrations" class="card">Loading registrations...</div>
+      </section>
+    </main>
+  `;
+}
+
+async function loadMyRegistrations() {
+  try {
+    const rows = await api("/api/my-registrations");
+    const target = $("#myRegistrations");
+    if (!target) return;
+
+    target.innerHTML = rows.length ? rows.map(r => `
+      <div style="padding:12px 0;border-bottom:1px solid #29394a">
+        <h3>${esc(r.title)}</h3>
+        <p class="text-muted">${esc(r.category)} • FC ID: ${esc(r.fc_id)}</p>
+        <p>Status: <span class="badge">${esc(r.status)}</span></p>
+      </div>
+    `).join("") : "You haven't joined any tournaments yet.";
+  } catch (error) {
+    notice(error.message, true);
+  }
+}
+
+async function joinTournament(id) {
+  if (!state.user) {
+    state.page = "login";
+    state.authMode = "login";
+    render();
+    notice("Please login to join a tournament.");
+    return;
+  }
+
+  const t = state.tournaments.find(x => Number(x.id) === Number(id));
+  if (!t) return;
+
+  const fc_id = prompt("Enter your FC Mobile Player ID:");
+  if (!fc_id || !fc_id.trim()) return;
+
+  const phone = prompt("Enter your phone number:");
+  if (!phone || !phone.trim()) return;
+
+  try {
+    await api(`/api/tournaments/${id}/join`, {
+      method: "POST",
+      body: JSON.stringify({fc_id:fc_id.trim(),phone:phone.trim()})
+    });
+    notice("Registration submitted successfully!");
+  } catch (error) {
+    notice(error.message, true);
+  }
+}
+
+function adminPage() {
+  return `
+    <main>
+      <h1>🛡️ Admin Panel</h1>
+      <p class="text-muted" style="margin:8px 0 20px">Manage your FC Mobile tournaments.</p>
+
+      <div class="admin-panel">
+        <div class="admin-tabs">
+          <button class="${state.adminTab === "tournaments" ? "active" : ""}" onclick="adminTab('tournaments')">Tournaments</button>
+          <button class="${state.adminTab === "registrations" ? "active" : ""}" onclick="adminTab('registrations')">Players</button>
+          <button class="${state.adminTab === "settings" ? "active" : ""}" onclick="adminTab('settings')">Settings</button>
+        </div>
+        <div id="adminContent">Loading...</div>
+      </div>
+    </main>
+  `;
+}
+
+async function loadAdminContent() {
+  const target = $("#adminContent");
+  if (!target) return;
+
+  try {
+    if (state.adminTab === "tournaments") {
+      target.innerHTML = `
+        <h2>Create Tournament</h2>
+        <form id="tournamentForm" style="margin:15px 0 25px">
+          <label>Tournament Name</label>
+          <input name="title" placeholder="NES FC Mobile Championship" required>
+          <label>Category</label>
+          <select name="category" required>
+            <option value="FC MOBILE 1V1">FC Mobile 1V1</option>
+            <option value="FC MOBILE 2V2">FC Mobile 2V2</option>
+          </select>
+          <label>Entry Fee (৳)</label>
+          <input name="entry_fee" type="number" min="0" value="0">
+          <label>Prize Pool (৳)</label>
+          <input name="prize" type="number" min="0" value="0">
+          <label>Slots</label>
+          <input name="slots" type="number" min="2" value="32">
+          <label>Match Date</label>
+          <input name="match_date" type="datetime-local">
+          <button class="btn" type="submit">Create Tournament</button>
+        </form>
+        <h2>Existing Tournaments</h2>
+        ${tournamentCards(state.tournaments)}
+        <div id="deleteList">
+          ${state.tournaments.map(t => `
+            <button class="secondary" style="margin:4px" onclick="deleteTournament(${Number(t.id)})">
+              Delete #${Number(t.id)}
+            </button>
+          `).join("")}
+        </div>
+      `;
+    }
+
+    if (state.adminTab === "registrations") {
+      const rows = await api("/api/admin/registrations");
+      target.innerHTML = rows.length ? rows.map(r => `
+        <div class="card">
+          <h3>${esc(r.name)} — ${esc(r.title)}</h3>
+          <p>Email: ${esc(r.email)}</p>
+          <p>FC ID: ${esc(r.fc_id)}</p>
+          <p>Phone: ${esc(r.phone)}</p>
+          <p>Status: ${esc(r.status)}</p>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px">
+            <button class="btn" onclick="updateRegistration(${Number(r.id)},'approved')">Approve</button>
+            <button class="secondary" onclick="updateRegistration(${Number(r.id)},'rejected')">Reject</button>
+          </div>
+        </div>
+      `).join("") : `<div class="card">No registrations yet.</div>`;
+    }
+
+    if (state.adminTab === "settings") {
+      const settings = await api("/api/admin/settings");
+      target.innerHTML = `
+        <h2>Website Settings</h2>
+        <form id="settingsForm" style="margin-top:15px">
+          <label>Website Name</label>
+          <input name="site_name" value="${esc(settings.site_name)}">
+          <label>Logo Text</label>
+          <input name="logo_text" value="${esc(settings.logo_text)}">
+          <label>Home Notice</label>
+          <textarea name="home_notice">${esc(settings.home_notice)}</textarea>
+          <label>bKash Number</label>
+          <input name="bkash_number" value="${esc(settings.bkash_number)}">
+          <label>Nagad Number</label>
+          <input name="nagad_number" value="${esc(settings.nagad_number)}">
+          <label>Rocket Number</label>
+          <input name="rocket_number" value="${esc(settings.rocket_number)}">
+          <button class="btn" type="submit">Save Settings</button>
+        </form>
+      `;
+    }
+  } catch (error) {
+    target.innerHTML = `<div class="card">${esc(error.message)}</div>`;
+  }
+}
+
+async function deleteTournament(id) {
+  if (!confirm("Delete this tournament?")) return;
+
+  try {
+    await api(`/api/admin/tournaments/${id}`, {method:"DELETE"});
+    await loadTournaments();
+    await loadAdminContent();
+    notice("Tournament deleted.");
+  } catch (error) {
+    notice(error.message, true);
+  }
+}
+
+async function updateRegistration(id, status) {
+  try {
+    await api(`/api/admin/registrations/${id}`, {
+      method:"PATCH",
+      body:JSON.stringify({status})
+    });
+    await loadAdminContent();
+    notice("Registration updated.");
+  } catch (error) {
+    notice(error.message, true);
+  }
+}
+
+function render() {
+  let content = "";
+
+  if (state.page === "home") content = homePage();
+  else if (state.page === "tournaments") content = tournamentsPage();
+  else if (state.page === "login" || state.page === "register") content = authPage();
+  else if (state.page === "dashboard" && state.user) content = dashboardPage();
+  else if (state.page === "admin" && state.user?.role === "admin") content = adminPage();
+  else content = homePage();
+
+  app.innerHTML = header() + content + footer();
+
+  if (state.page === "dashboard") loadMyRegistrations();
+  if (state.page === "admin") loadAdminContent();
+}
+
+function go(page) {
+  if ((page === "dashboard" || page === "admin") && !state.user) {
+    page = "login";
+  }
+
+  if (page === "admin" && state.user?.role !== "admin") {
+    notice("Admin access required.", true);
+    return;
+  }
+
+  state.page = page;
+  render();
+  window.scrollTo(0,0);
+}
+
+function switchAuth(mode) {
+  state.authMode = mode;
+  state.page = mode;
+  render();
+}
+
+function filterCategory(category) {
+  state.tournaments = state.tournaments.filter(t => t.category === category);
+  state.page = "tournaments";
+  render();
+  loadTournaments().catch(() => {});
+}
+
+async function logout() {
+  try {
+    await api("/api/logout", {method:"POST"});
+    state.user = null;
+    state.page = "home";
+    await loadTournaments();
+    render();
+    notice("Logged out successfully.");
+  } catch (error) {
+    notice(error.message, true);
+  }
+}
+
+function adminTab(tab) {
+  state.adminTab = tab;
+  render();
+}
+
+document.addEventListener("submit", async event => {
+  event.preventDefault();
+  const form = event.target;
+  const values = Object.fromEntries(new FormData(form).entries());
+
+  try {
+    if (form.id === "authForm") {
+      const register = state.authMode === "register";
+      const data = await api(register ? "/api/register" : "/api/login", {
+        method:"POST",
+        body:JSON.stringify(values)
+      });
+
+      state.user = data.user;
+      state.settings = data.settings || state.settings;
+      state.page = "home";
+      await loadTournaments();
+      render();
+      notice("Welcome to NIROB E-SPORTS!");
+    }
+
+    if (form.id === "tournamentForm") {
+      await api("/api/admin/tournaments", {
+        method:"POST",
+        body:JSON.stringify(values)
+      });
+      await loadTournaments();
+      await loadAdminContent();
+      notice("Tournament created!");
+    }
+
+    if (form.id === "settingsForm") {
+      await api("/api/admin/settings", {
+        method:"PUT",
+        body:JSON.stringify(values)
+      });
+      state.settings = await api("/api/admin/settings");
+      render();
+      notice("Settings saved!");
+    }
+  } catch (error) {
+    notice(error.message, true);
+  }
+});
+
 init();
